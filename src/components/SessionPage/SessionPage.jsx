@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useSession } from '../../hooks/useSession.js';
 import TitleInput from './TitleInput.jsx';
 import ExerciseBlock from './ExerciseBlock.jsx';
@@ -12,15 +12,40 @@ function formatDate(iso) {
   });
 }
 
+// Small delay before flipping "Saving…" to "Saved" — the write itself is
+// instant (localStorage), but a status that changes in 0ms reads as
+// nothing happening at all. This is purely a perception aid.
+const SAVED_DELAY_MS = 350;
+
 export default function SessionPage({ existingSession, onSave, onBack }) {
-  const session = useSession(existingSession, onSave);
+  const [status, setStatus] = useState('idle'); // idle | saving | saved
+  const savedTimeout = useRef(null);
+
+  const handleSave = useCallback(
+    (updatedSession) => {
+      onSave(updatedSession);
+      setStatus('saving');
+      clearTimeout(savedTimeout.current);
+      savedTimeout.current = setTimeout(() => setStatus('saved'), SAVED_DELAY_MS);
+    },
+    [onSave]
+  );
+
+  const session = useSession(existingSession, handleSave);
   const [showPicker, setShowPicker] = useState(false);
 
   return (
     <div className="max-w-sm mx-auto p-4">
-      <button onClick={onBack} className="text-xs text-gray-400 mb-3">
-        ← History
-      </button>
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={onBack} className="text-xs text-gray-400">
+          ← History
+        </button>
+        {status !== 'idle' && (
+          <p className="text-xs text-gray-400">
+            {status === 'saving' ? 'Saving…' : 'Saved'}
+          </p>
+        )}
+      </div>
 
       <div className="bg-white border border-gray-200 rounded-xl p-4 min-h-[320px]">
         <TitleInput value={session.title} onChange={session.setTitle} />
